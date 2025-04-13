@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, render_template, redirect, url_for
 from flask_sqlalchemy import SQLAlchemy
 from flask_bcrypt import Bcrypt
 import jwt
@@ -7,8 +7,7 @@ from functools import wraps
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your_secret_key'
-# Replace with your actual PostgreSQL database details
-app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://user:password@host:5432/database'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///site.db'
 db = SQLAlchemy(app)
 bcrypt = Bcrypt(app)
 
@@ -67,14 +66,23 @@ def role_required(role):
     return decorator
 
 
+@app.route('/')
+def index():
+    return render_template('index.html')
+
+
 @app.route('/register', methods=['POST'])
 def register():
-    data = request.get_json()
-    hashed_password = bcrypt.generate_password_hash(data['password']).decode('utf-8')
-    user = User(username=data['username'], email=data['email'], password=hashed_password)
-    db.session.add(user)
-    db.session.commit()
-    return jsonify({'message': 'User registered successfully!'})
+    if request.method == 'POST':
+        username = request.form['username']
+        email = request.form['email']
+        password = request.form['password']
+        hashed_password = bcrypt.generate_password_hash(password).decode('utf-8')
+        user = User(username=username, email=email, password=hashed_password)
+        db.session.add(user)
+        db.session.commit()
+        return redirect(url_for('index'))
+    return render_template('index.html')
 
 
 @app.route('/login', methods=['POST'])
@@ -84,21 +92,56 @@ def login():
     if user and bcrypt.check_password_hash(user.password, data['password']):
         token = jwt.encode({'user_id': user.id, 'exp': datetime.datetime.utcnow() + datetime.timedelta(minutes=30)}, app.config['SECRET_KEY'], algorithm="HS256")
         return jsonify({'token': token})
-    return jsonify({'message': 'Invalid credentials!'}), 401
+    return redirect(url_for('index'))
 
 
-@app.route('/protected', methods=['GET'])
-@token_required
-def protected(current_user):
+def verify_token(token):
+    if not token:
+        return None, 'Token is missing!'
+
+    try:
+        data = jwt.decode(token, app.config['SECRET_KEY'], algorithms=["HS256"])
+        current_user = User.query.get(data['user_id'])
+        return current_user, None
+    except:
+        return None, 'Token is invalid!'
+
+
+def protected_route(current_user):
+    if not current_user:
+        return jsonify({'message': 'Token is invalid!'}), 403
     return jsonify({'message': f'Hello, {current_user.username}! This is a protected route.'})
 
 
-@app.route('/admin', methods=['GET'])
-@role_required('admin')
 def admin_route(current_user):
+    if not current_user:
+        return jsonify({'message': 'Token is invalid!'}), 403
+    if current_user.role != 'admin':
+        return jsonify({'message': 'Insufficient permissions!'}), 403
     return jsonify({'message': f'Hello, {current_user.username}! This is the admin route.'})
+
+
+@app.route('/protected', methods=['GET'])
+def handle_protected():
+    token = request.args.get('token')
+    current_user, error = verify_token(token)
+    if error:
+        return jsonify({'message': error}), 403
+    return protected_route(current_user)
+
+
+@app.route('/admin', methods=['GET'])
+def handle_admin():
+    token = request.args.get('token')
+    current_user, error = verify_token(token)
+    if error:
+        return jsonify({'message': error}), 403
+    return admin_route(current_user)
+
 
 if __name__ == '__main__':
     with app.app_context():
+        import os
+        os.makedirs(os.path.join(app.instance_path, 'templates'), exist_ok=True)
         db.create_all()
     app.run(debug=True)

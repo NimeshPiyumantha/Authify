@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>API UI</title>
+</head>
+<body>
+    <h1>Register</h1>
+    <form method="post" action="/register">
+        <input type="text" name="username" placeholder="Username" required><br>
+        <input type="email" name="email" placeholder="Email" required><br>
+        <input type="password" name="password" placeholder="Password" required><br>
+        <button type="submit">Register</button>
+    </form>
+
+    <h1>Login</h1>
+    <form method="post" action="/login">
+        <input type="email" name="email" placeholder="Email" required><br>
+        <input type="password" name="password" placeholder="Password" required><br>
+        <button type="submit">Login</button>
+    </form>
+
+    <h1>Protected</h1>
+    <form method="get" action="/protected">
+        <input type="text" name="token" placeholder="Token" required><br>
+        <button type="submit">Access Protected</button>
+    </form>
+
+    <h1>Admin</h1>
+    <form method="get" action="/admin">
+        <input type="text" name="token" placeholder="Token" required><br>
+        <button type="submit">Access Admin</button>
+    </form>
+</body>
+</html>
